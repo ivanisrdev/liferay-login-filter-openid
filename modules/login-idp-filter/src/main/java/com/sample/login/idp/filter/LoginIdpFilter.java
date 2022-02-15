@@ -3,8 +3,9 @@ package com.sample.login.idp.filter;
 import com.liferay.portal.configuration.metatype.bnd.util.ConfigurableUtil;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.util.PortalUtil;
+import com.liferay.portal.security.sso.openid.connect.OpenIdConnectAuthenticationHandler;
 import com.liferay.portal.security.sso.openid.connect.OpenIdConnectProviderRegistry;
-import com.liferay.portal.security.sso.openid.connect.OpenIdConnectServiceHandler;
 import com.sample.login.idp.filter.config.LoginIdpFilterConfiguration;
 import org.osgi.service.component.annotations.*;
 
@@ -29,7 +30,7 @@ public class LoginIdpFilter implements Filter {
     private volatile OpenIdConnectProviderRegistry _openIdConnectProviderRegistry;
 
     @Reference(policy = ReferencePolicy.DYNAMIC, policyOption = ReferencePolicyOption.GREEDY)
-    private volatile OpenIdConnectServiceHandler _openIdConnectServiceHandler;
+    private volatile OpenIdConnectAuthenticationHandler _openIdConnectAuthenticationHandler;
 
     private static final Log _log = LogFactoryUtil.getLog(LoginIdpFilter.class);
     private volatile LoginIdpFilterConfiguration _configuration;
@@ -42,12 +43,10 @@ public class LoginIdpFilter implements Filter {
             HttpServletRequest request = (HttpServletRequest) servletRequest;
             HttpServletResponse response = (HttpServletResponse) servletResponse;
 
+            long companyId = PortalUtil.getCompanyId(request);
+
             //Get OpenId provider specified in the OSGI system configuration
-            String openIdConnectProviderName = String.valueOf(_openIdConnectProviderRegistry.getOpenIdConnectProviderNames()
-                                                        .stream()
-                                                        .filter(openIdConnectProviderName1 -> _openIdConnectProviderRegistry.getOpenIdConnectProviderNames().contains(_configuration.idpName()))
-                                                        .findAny()
-                                                        .orElse(null));
+            String openIdConnectProviderName = _openIdConnectProviderRegistry.getOpenIdConnectProvider(companyId, _configuration.idpName()).getName();
 
             if (openIdConnectProviderName == null || openIdConnectProviderName.isEmpty()) {
                 filterChain.doFilter(request, response);
@@ -57,7 +56,7 @@ public class LoginIdpFilter implements Filter {
             _log.debug("openIdConnectProviderName: " + openIdConnectProviderName);
 
             // Request Provider's authentication
-            _openIdConnectServiceHandler.requestAuthentication(openIdConnectProviderName, request, response);
+            _openIdConnectAuthenticationHandler.requestAuthentication(openIdConnectProviderName, request, response);
 
         } catch (Exception exception) {
             _log.error("Error in LoginIdpFilter: " + exception.getMessage(), exception);
